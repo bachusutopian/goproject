@@ -8,86 +8,88 @@ import (
 	"sync"
 )
 
-func matrix_multiplication(a, b, c [][]int, row, col int, mutex *sync.Mutex) {
+//var NULL *error = nil
+
+func matrix_multiplication(a, b, c [][]int, row, col int, mutex_as_parameter *sync.Mutex) {
 	var k int
 	for k = 0; k < len(a[0]); k++ {
-		mutex.Lock()
+		mutex_as_parameter.Lock()
 		c[row][col] += a[row][k] * b[k][col]
-		mutex.Unlock()
+		mutex_as_parameter.Unlock()
 	}
 }
 
-func handleConnection(conn net.Conn, wg *sync.WaitGroup) {
+func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
 	defer wg.Done()
-	log.Println("Accepted ", conn.RemoteAddr())
+	log.Println("Connection accepted ", connection.RemoteAddr())
 
 	// Send welcome message and request matrix dimensions
-	conn.Write([]byte("Hello ! Welcome to the Matrix Multiplicator\n"))
-	conn.Write([]byte("Please enter the dimensions of the first matrix (rows columns):\n>"))
+	connection.Write([]byte("Hello ! Welcome to the Matrix Multiplicator\n"))
+	connection.Write([]byte("Please enter the dimensions of the first matrix (rows columns format):\n_"))
 
 	// Read matrix dimensions from client
-	s := bufio.NewScanner(conn)
+	scan := bufio.NewScanner(connection)
 	var a_rows, a_cols, b_rows, b_cols int
-	if s.Scan() {
-		input := s.Text()
-		n, err := fmt.Sscanf(input, "%d %d", &a_rows, &a_cols)
-		if n != 2 || err != nil {
-			conn.Write([]byte("This is an invalid input, tap the right rows and columns\n"))
-			conn.Close()
+	if scan.Scan() {
+		input := scan.Text()
+		n_input, error_ := fmt.Sscanf(input, "%d %d", &a_rows, &a_cols)
+		if n_input != 2 || error_ != nil {
+			connection.Write([]byte("This is an invalid input, tap the right rows and columns\n"))
+			connection.Close()
 			return
 		}
 	}
-	conn.Write([]byte("Please, enter the first matrix(tap Enter first):\n>"))
+	connection.Write([]byte("Please, enter the first matrix(each value on a matrix separated by an ENTER):\n_"))
 	a := make([][]int, a_rows)
 	for i := range a {
 		a[i] = make([]int, a_cols)
 	}
 	for i := 0; i < a_rows; i++ {
 		for j := 0; j < a_cols; j++ {
-			if !s.Scan() {
-				conn.Write([]byte("Invalid input, please enter the matrix elements separated by spaces\n"))
-				conn.Close()
+			if !scan.Scan() {
+				connection.Write([]byte("Invalid input, please enter the matrix elements separated by spaces\n"))
+				connection.Close()
 				return
 			}
-			_, err := fmt.Sscanf(s.Text(), "%d", &a[i][j])
+			_, err := fmt.Sscanf(scan.Text(), "%d", &a[i][j])
 			if err != nil {
-				conn.Write([]byte("Invalid input, please enter integer values for the matrix elements\n"))
-				conn.Close()
+				connection.Write([]byte("Invalid input, please enter integer values for the matrix elements\n"))
+				connection.Close()
 				return
 			}
 		}
 	}
-	conn.Write([]byte("Please enter the dimensions of the second matrix (rows columns):\n>"))
-	if s.Scan() {
-		input := s.Text()
-		n, err := fmt.Sscanf(input, "%d %d", &b_rows, &b_cols)
-		if n != 2 || err != nil {
-			conn.Write([]byte("Invalid input, please enter the dimensions in the format 'rows columns'\n"))
-			conn.Close()
+	connection.Write([]byte("Please enter the dimensions of the second matrix (rows columns format):\n>"))
+	if scan.Scan() {
+		input := scan.Text()
+		n_input, error_ := fmt.Sscanf(input, "%d %d", &b_rows, &b_cols)
+		if n_input != 2 || error_ != nil {
+			connection.Write([]byte("Invalid input, please enter the dimensions in the format 'rows columns'\n"))
+			connection.Close()
 			return
 		}
 	}
 	if a_cols != b_rows {
-		conn.Write([]byte("Invalid matrix dimensions, the number of columns of the first matrix must be equal to the number of rows of the second matrix\n"))
-		conn.Close()
+		connection.Write([]byte("Invalid matrix dimensions, the number of columns of the first matrix must be equal to the number of rows of the second matrix\n"))
+		connection.Close()
 		return
 	}
-	conn.Write([]byte("Please enter the second matrix(tap Enter first):\n>"))
+	connection.Write([]byte("Please enter the second matrix(each value on a matrix separated by an ENTER):\n_"))
 	b := make([][]int, b_rows)
 	for i := range b {
 		b[i] = make([]int, b_cols)
 	}
 	for i := 0; i < b_rows; i++ {
 		for j := 0; j < b_cols; j++ {
-			if !s.Scan() {
-				conn.Write([]byte("Invalid input, please enter the matrix elements separated by spaces\n"))
-				conn.Close()
+			if !scan.Scan() {
+				connection.Write([]byte("Invalid input, please enter the matrix elements separated by spaces\n"))
+				connection.Close()
 				return
 			}
-			_, err := fmt.Sscanf(s.Text(), "%d", &b[i][j])
-			if err != nil {
-				conn.Write([]byte("Invalid input, please enter integer values for the matrix elements\n"))
-				conn.Close()
+			_, error_ := fmt.Sscanf(scan.Text(), "%d", &b[i][j])
+			if error_ != nil {
+				connection.Write([]byte("Invalid input, please enter integer values for the matrix elements\n"))
+				connection.Close()
 				return
 			}
 		}
@@ -96,37 +98,40 @@ func handleConnection(conn net.Conn, wg *sync.WaitGroup) {
 	for i := range c {
 		c[i] = make([]int, b_cols)
 	}
-	var mutex sync.Mutex
+	var mutex_as_parameter sync.Mutex
+	wg.Add(1)
 	for i := 0; i < a_rows; i++ {
 		for j := 0; j < b_cols; j++ {
-			go matrix_multiplication(a, b, c, i, j, &mutex)
+			go matrix_multiplication(a, b, c, i, j, &mutex_as_parameter)
 		}
 	}
-	conn.Write([]byte("Multiplication done!\n"))
+
+	connection.Write([]byte("Multiplication done!\n"))
 	for i := 0; i < a_rows; i++ {
 		for j := 0; j < b_cols; j++ {
-			conn.Write([]byte(fmt.Sprintf("%d ", c[i][j])))
+			connection.Write([]byte(fmt.Sprintf("%d ", c[i][j])))
 		}
-		conn.Write([]byte("\n"))
+		connection.Write([]byte("\n"))
 	}
-	conn.Close()
+
+	connection.Close()
 }
 
 func main() {
-	listener, err := net.Listen("tcp", ":9000")
-	if err != nil {
-		panic(err)
+	listener, error_ := net.Listen("tcp", ":9000")
+	if error_ != nil {
+		panic(error_)
 	}
 	var wg sync.WaitGroup
 	for {
-		conn, err := listener.Accept()
-		if err != nil {
-			log.Println("Accept Error", err)
+		connection, error_ := listener.Accept()
+		if error_ != nil {
+			log.Println("Accept Error", error_)
 			continue
 		}
 		wg.Add(1)
 		go func() {
-			handleConnection(conn, &wg)
+			handleConnection(connection, &wg)
 		}()
 	}
 	wg.Wait()
