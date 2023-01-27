@@ -8,8 +8,6 @@ import (
 	"sync"
 )
 
-//var NULL *error = nil
-
 func matrix_multiplication(a, b, c [][]int, row, col int, mutex_as_parameter *sync.Mutex) {
 	var k int
 	for k = 0; k < len(a[0]); k++ {
@@ -74,7 +72,7 @@ func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
 		connection.Close()
 		return
 	}
-	connection.Write([]byte("Please enter the second matrix(each value on a matrix separated by an ENTER):\n_"))
+	connection.Write([]byte("Please enter the second matrix(each value on a matrix separated by an ENTER):\n"))
 	b := make([][]int, b_rows)
 	for i := range b {
 		b[i] = make([]int, b_cols)
@@ -99,13 +97,11 @@ func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
 		c[i] = make([]int, b_cols)
 	}
 	var mutex_as_parameter sync.Mutex
-	wg.Add(1)
 	for i := 0; i < a_rows; i++ {
 		for j := 0; j < b_cols; j++ {
 			go matrix_multiplication(a, b, c, i, j, &mutex_as_parameter)
 		}
 	}
-
 	connection.Write([]byte("Multiplication done!\n"))
 	for i := 0; i < a_rows; i++ {
 		for j := 0; j < b_cols; j++ {
