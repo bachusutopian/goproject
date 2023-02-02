@@ -4,37 +4,15 @@ import (
 	"bufio"
 	"fmt"
 	"log"
-	"net"
 	"os"
-	"sync"
+	"strconv"
+	"strings"
 )
 
-func matrix_multiplication(a, b, c [][]int, row, col int, mutex_as_parameter *sync.Mutex) {
-	var k int
-	for k = 0; k < len(a[0]); k++ {
-		mutex_as_parameter.Lock()
-		c[row][col] += a[row][k] * b[k][col]
-		mutex_as_parameter.Unlock()
-	}
-}
-
-func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
-	defer wg.Done()
-	log.Println("Connection accepted ", connection.RemoteAddr())
-
-	// Send welcome message and request matrix dimensions
-	connection.Write([]byte("Hello ! Welcome to the Matrix Multiplicator\n"))
-	connection.Write([]byte("Please enter the names of the files containing your matrices:\n_"))
-
-	reader := bufio.NewReader(connection)
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Printf("read line: %s-\n", line)
+func main() {
 
 	// open file
-	f, err := os.Open(line)
+	f, err := os.OpenFile("matrix1.txt", os.O_RDONLY, 0644)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -44,33 +22,34 @@ func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
 	// read the file line by line using scanner
 	scanner := bufio.NewScanner(f)
 
+	var mat [][]int
+
 	for scanner.Scan() {
-		// do something with a line
-		fmt.Printf("line: %s\n", scanner.Text())
+		var row []int
+
+		str := scanner.Text()
+		hf := strings.Split(str, " ")
+
+		for i := 0; i < len(hf); i++ {
+			print("\nhf[i] = ", hf[i])
+			j, err := strconv.Atoi(hf[i])
+			if err == nil {
+				row = append(row, j)
+			}
+		}
+
+		mat = append(mat, row)
+
+	}
+	print("MATRIX\n")
+	for k := 0; k < len(mat); k++ {
+		for h := 0; h < len(mat[k]); h++ {
+			fmt.Print(mat[k][h], " ")
+		}
+		fmt.Println()
 	}
 
 	if err := scanner.Err(); err != nil {
 		log.Fatal(err)
 	}
-
-}
-
-func main() {
-	listener, error_ := net.Listen("tcp", ":9000")
-	if error_ != nil {
-		panic(error_)
-	}
-	var wg sync.WaitGroup
-	for {
-		connection, error_ := listener.Accept()
-		if error_ != nil {
-			log.Println("Accept Error", error_)
-			continue
-		}
-		wg.Add(1)
-		go func() {
-			handleConnection(connection, &wg)
-		}()
-	}
-	wg.Wait()
 }
