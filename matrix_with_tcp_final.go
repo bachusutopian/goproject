@@ -5,16 +5,55 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 )
 
-func matrix_multiplication(a, b, c [][]int, row, col int, mutex_as_parameter *sync.Mutex) {
+func matrix_multiplication(a, b, c [][]int, row int, col int) {
+	print("dudu\n")
 	var k int
 	for k = 0; k < len(a[0]); k++ {
-		mutex_as_parameter.Lock()
-		c[row][col] += a[row][k] * b[k][col]
-		mutex_as_parameter.Unlock()
+		print("dada\n")
+		c[row][col] = a[row][k] * b[k][col]
 	}
+}
+
+func openMatrix(name string) [][]int {
+	// open file
+	f, err := os.OpenFile(name, os.O_RDONLY, 0644)
+	if err != nil {
+		log.Fatal(err)
+	}
+	// remember to close the file at the end of the program
+	defer f.Close()
+
+	// read the file line by line using scanner
+	scanner := bufio.NewScanner(f)
+
+	var mat [][]int
+
+	for scanner.Scan() {
+		var row []int
+
+		str := scanner.Text()
+		hf := strings.Split(str, " ")
+
+		for i := 0; i < len(hf); i++ {
+			j, err := strconv.Atoi(hf[i])
+			if err == nil {
+				row = append(row, j)
+			}
+		}
+
+		mat = append(mat, row)
+
+	}
+	if err := scanner.Err(); err != nil {
+		log.Fatal(err)
+	}
+	return mat
 }
 
 func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
@@ -23,88 +62,49 @@ func handleConnection(connection net.Conn, wg *sync.WaitGroup) {
 
 	// Send welcome message and request matrix dimensions
 	connection.Write([]byte("Hello ! Welcome to the Matrix Multiplicator\n"))
-	connection.Write([]byte("Please enter the dimensions of the first matrix (rows columns format):\n_"))
 
-	// Read matrix dimensions from client
-	scan := bufio.NewScanner(connection)
-	var a_rows, a_cols, b_rows, b_cols int
-	if scan.Scan() {
-		input := scan.Text()
-		n_input, error_ := fmt.Sscanf(input, "%d %d", &a_rows, &a_cols)
-		if n_input != 2 || error_ != nil {
-			connection.Write([]byte("This is an invalid input, tap the right rows and columns\n"))
-			connection.Close()
-			return
-		}
-	}
-	connection.Write([]byte("Please, enter the first matrix(each value on a matrix separated by an ENTER):\n_"))
-	a := make([][]int, a_rows)
-	for i := range a {
-		a[i] = make([]int, a_cols)
-	}
-	for i := 0; i < a_rows; i++ {
-		for j := 0; j < a_cols; j++ {
-			if !scan.Scan() {
-				connection.Write([]byte("Invalid input, please enter the matrix elements separated by spaces\n"))
-				connection.Close()
-				return
-			}
-			_, err := fmt.Sscanf(scan.Text(), "%d", &a[i][j])
-			if err != nil {
-				connection.Write([]byte("Invalid input, please enter integer values for the matrix elements\n"))
-				connection.Close()
-				return
-			}
-		}
-	}
-	connection.Write([]byte("Please enter the dimensions of the second matrix (rows columns format):\n>"))
-	if scan.Scan() {
-		input := scan.Text()
-		n_input, error_ := fmt.Sscanf(input, "%d %d", &b_rows, &b_cols)
-		if n_input != 2 || error_ != nil {
-			connection.Write([]byte("Invalid input, please enter the dimensions in the format 'rows columns'\n"))
-			connection.Close()
-			return
-		}
-	}
-	if a_cols != b_rows {
-		connection.Write([]byte("Invalid matrix dimensions, the number of columns of the first matrix must be equal to the number of rows of the second matrix\n"))
-		connection.Close()
-		return
-	}
-	connection.Write([]byte("Please enter the second matrix(each value on a matrix separated by an ENTER):\n"))
-	b := make([][]int, b_rows)
-	for i := range b {
-		b[i] = make([]int, b_cols)
-	}
-	for i := 0; i < b_rows; i++ {
-		for j := 0; j < b_cols; j++ {
-			if !scan.Scan() {
-				connection.Write([]byte("Invalid input, please enter the matrix elements separated by spaces\n"))
-				connection.Close()
-				return
-			}
-			_, error_ := fmt.Sscanf(scan.Text(), "%d", &b[i][j])
-			if error_ != nil {
-				connection.Write([]byte("Invalid input, please enter integer values for the matrix elements\n"))
-				connection.Close()
-				return
-			}
-		}
-	}
-	c := make([][]int, a_rows)
+	var a [][]int
+	var b [][]int
+
+	// Read names of files from client
+	scanner := bufio.NewScanner(connection)
+
+	var mat1 string
+	connection.Write([]byte("Enter the name of the file for the first matrix:"))
+	scanner.Scan()
+	mat1 = scanner.Text()
+	fmt.Printf("Matrix 1: %q\n\n", mat1)
+
+	var mat2 string
+	connection.Write([]byte("Enter the name of the file for the second matrix:"))
+	scanner.Scan()
+	mat2 = scanner.Text()
+	fmt.Printf("Matrix 2: %q\n\n", mat2)
+
+	a = openMatrix(mat1)
+	b = openMatrix(mat2)
+
+	dim1 := len(a)
+	dim2 := len(b[0])
+
+	var c [][]int
+	c = make([][]int, dim1)
 	for i := range c {
-		c[i] = make([]int, b_cols)
-	}
-	var mutex_as_parameter sync.Mutex
-	for i := 0; i < a_rows; i++ {
-		for j := 0; j < b_cols; j++ {
-			go matrix_multiplication(a, b, c, i, j, &mutex_as_parameter)
+		c[i] = make([]int, dim2)
+		for j := range c[i] {
+			c[i][j] = 0
 		}
 	}
+
+	for i := 0; i < len(a); i++ {
+		for j := 0; j < len(b[i]); j++ {
+			go matrix_multiplication(a, b, c, i, j)
+		}
+	}
+
 	connection.Write([]byte("Multiplication done!\n"))
-	for i := 0; i < a_rows; i++ {
-		for j := 0; j < b_cols; j++ {
+	for i := 0; i < len(c); i++ {
+		for j := 0; j < len(c[i]); j++ {
 			connection.Write([]byte(fmt.Sprintf("%d ", c[i][j])))
 		}
 		connection.Write([]byte("\n"))
